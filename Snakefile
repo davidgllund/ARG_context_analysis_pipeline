@@ -49,7 +49,7 @@ def get_top_items(list):
         names += "NA"
 
     return names
-
+    
 def summarize_blast_results(results,threshold):
     elements=[]
     summary=[]
@@ -97,9 +97,9 @@ def summarize_blast_results(results,threshold):
             if hit is not None:
                 tmp_query.append(query[i])
                 tmp_id.append(identity[i])
-                tmp_start.append(s_start[i])
-                tmp_end.append(s_end[i])
-                tmp_range.append((s_start[i],s_end[i]))
+                tmp_start.append(min(s_start[i],s_end[i]))
+                tmp_end.append(max(s_start[i],s_end[i]))
+                tmp_range.append((min(s_start[i],s_end[i]),max(s_start[i],s_end[i])))
 
         df = np.transpose(pd.DataFrame([tmp_query,tmp_id,tmp_start,tmp_end]))
 
@@ -161,7 +161,130 @@ def summarize_blast_results(results,threshold):
             summary.append(name + " [" + str(max(percentages)) + "-" + str(min(percentages)) + "%] (" + str(j) + ")" + "\n")
 
     return summary
+
+
+def summarize_blast_results_distance_considered(results,position,threshold,distance):
+    elements=[]
+    summary=[]
     
+    df_pos = pd.read_csv(position, delimiter = '\t', names=("Context","Start","End"))
+
+    # Define lists to hold input data
+    query=[]
+    subject=[]
+    identity=[]
+    aln_length=[]
+    s_start=[]
+    s_end=[]
+
+    with open(results) as tsv:
+        for line in csv.reader(tsv, delimiter="\t"):
+            # Remove extraneous lines from results
+            hit = re.search("#", str(line))
+            if hit is None:
+                # Only keep hits that are above threshold in terms of AA identity
+                if float(line[2]) >= float(threshold):
+                    query.append(line[0])
+                    subject.append(line[1])
+                    identity.append(float(line[2]))
+                    aln_length.append(float(line[3]))
+                    s_start.append(int(line[8]))
+                    s_end.append(int(line[9]))
+                
+    # Divide hits according to context in which they were found
+    contexts=[]
+
+    # Remove duplicate context names
+    for name in subject:
+        if name not in contexts:
+            contexts.append(name)
+        
+    # For each genetic context, find the best hit among overlapping hits, report these together with their corresponding AA identity
+    for name in contexts:
+        bool=df_pos.Context.str.contains(name)
+        arg_start = df_pos[bool].min(axis=1)
+        arg_end = df_pos[bool].max(axis=1)
+    
+        if sum(bool) == 0:
+            continue
+        else:
+            tmp_query=[]
+            tmp_id=[]
+            tmp_start=[]
+            tmp_end=[]
+            tmp_range=[]
+
+            for i in range(len(subject)):
+                if arg_end.iloc[0] > max(s_start[i],s_end[i]) and abs(arg_start.iloc[0]-max(s_start[i],s_end[i]))<int(distance) or arg_start.iloc[0] < min(s_start[i],s_end[i]) and abs(min(s_start[i],s_end[i])-arg_end.iloc[0])<int(distance):
+                    hit = re.search(subject[i], name)
+                    if hit is not None:
+                        tmp_query.append(query[i])
+                        tmp_id.append(identity[i])
+                        tmp_start.append(min(s_start[i],s_end[i]))
+                        tmp_end.append(max(s_start[i],s_end[i]))
+                        tmp_range.append((min(s_start[i],s_end[i]),max(s_start[i],s_end[i])))
+
+        df = np.transpose(pd.DataFrame([tmp_query,tmp_id,tmp_start,tmp_end]))
+
+        # Sort the intervals by lower bound
+        sorted_intervals = sorted(tmp_range, key=lambda tup: tup[0])
+        overlapping = []
+
+        for higher in sorted_intervals:
+            if not overlapping:
+                # Add first intervall to the list of overlapping intervals
+                overlapping.append(higher)
+            else:
+                # Get current interval with the highest values
+                lower = overlapping[-1]
+                # Check if intervals overlap (lower bound of new interval <= higher bound of current interval)
+                if higher[0] <= lower[1]:
+                    # Define new upper bound of overlapping interval
+                    upper_limit = max(lower[1], higher[1])
+                    # Replace current highest interval with combination of overlapping intervals
+                    overlapping[-1] = (lower[0], upper_limit)
+                else:
+                    # If no overlap found, add new interval to list of overlapping intervals
+                    overlapping.append(higher)
+
+        for interval in overlapping:
+            overlap_query=[]
+            overlap_id=[]
+            for i in range(len(df.iloc[:,0])):
+                if df.iloc[i,2] in range(interval[0],interval[1]) or df.iloc[i,3] in range(interval[0],interval[1]):
+                    overlap_query.append(df.iloc[i,0])
+                    overlap_id.append(df.iloc[i,1])
+
+            hits=np.transpose(pd.DataFrame([overlap_query, overlap_id]))
+            best_hits=hits.sort_values(by=[1], ascending=False)
+
+            elements.append((best_hits.iloc[0,0], best_hits.iloc[0,1]))
+        
+    # Compile final results
+    unique = []
+
+    for item in elements:
+        if item[0] not in unique:
+            unique.append(item[0])
+
+    for name in unique:
+        j = 0
+        percentages = []
+
+        for item in elements:
+            hit = re.search(name,item[0])
+
+            if hit is not None:
+                j += 1
+                percentages.append(item[1])
+
+        if min(percentages) == max(percentages):
+            summary.append(name + " [" + str(max(percentages)) + "%] (" + str(j) + ")" + "\n")
+        else:
+            summary.append(name + " [" + str(max(percentages)) + "-" + str(min(percentages)) + "%] (" + str(j) + ")" + "\n")
+
+        return summary
+
 #----------------------------------------------------------------------------------------------------------------------------------------------------------
 #----------------------------------------------------------------------------------------------------------------------------------------------------------
 # RULES FOR COMPILING METADATA ABOUT GENE FAMILIES
@@ -175,27 +298,81 @@ rule all:
         "metadata_complete.txt"
 
 #----------------------------------------------------------------------------------------------------------------------------------------------------------
-# Search for conjugative elements
+# Generate auxillary data
 #----------------------------------------------------------------------------------------------------------------------------------------------------------
-rule apply_conjscan:
+rule translate_contexts:
     input:
         "{dir}/contexts.fna"
     output:
-        mge = temp("{dir}/conj_elements.txt"),
-        hits = temp("{dir}/conj_hits.txt"),
-        prot = temp("{dir}/contexts_protein.fna"),
-        dir = directory("{dir}/conjscan")
+        prot = temp("{dir}/contexts_protein.fna")
     shell:
         """
         set +o pipefail
         transeq {input} {output.prot} -frame=6
+        """
 
+rule create_blast_databases:
+    input:
+        nucl = "{dir}/contexts.fna",
+        prot = "{dir}/contexts_protein.fna"
+    output:
+        nucl = temp("{dir}/db_nucl/contexts.fna"),
+	prot = temp("{dir}/db_prot/contexts.fna")
+    shell:
+        """
+        set +o pipefail
+
+        if [[ ! -d {wildcards.dir}/db_nucl ]]; then
+            mkdir {wildcards.dir}/db_nucl
+        fi
+        
+        cp {input.nucl} {output.nucl}
+        makeblastdb -in {output.nucl} -dbtype nucl
+
+        if [[ ! -d {wildcards.dir}/db_prot ]]; then
+            mkdir {wildcards.dir}/db_prot
+        fi
+        
+        cp {input.prot} {output.prot}
+        makeblastdb -in {output.prot} -dbtype prot
+        """
+
+rule find_arg_positions:
+    input:
+        genes = "{dir}/nucleotides.fna",
+        contexts = "{dir}/db_nucl/contexts.fna"
+    output:
+        out = "{dir}/blastout_position.txt",
+        tmp = temp("{dir}/pos_tmp.txt"),
+        positions = "{dir}/ARG_positions.txt"
+    shell:
+        """
+        set +o pipefail
+
+        blastn -query {input.genes} -db {input.contexts} -out {output.out} -evalue 0.00000001 -qcov_hsp_perc 100 -outfmt 7
+        grep -v '^#' {output.out} | cut -f 2,9,10 > {output.tmp}
+        python /home/dlund/scripts/miscellaneous_scripts/remove_duplicate_lines.py {output.tmp} {output.positions}
+        """
+
+#----------------------------------------------------------------------------------------------------------------------------------------------------------
+# Search for conjugative elements
+#----------------------------------------------------------------------------------------------------------------------------------------------------------
+rule apply_conjscan:
+    input:
+        "{dir}/contexts_protein.fna"
+    output:
+        mge = temp("{dir}/conj_elements.txt"),
+        hits = temp("{dir}/conj_hits.txt"),
+        dir = directory("{dir}/conjscan")
+    shell:
+        """
+        set +o pipefail
         mkdir {output.dir}
 
         for model in /home/dlund/models/conjscan_models/*
         do 
             name=$(echo $model | rev | cut -d '/' -f 1 | rev | cut -d '.' -f 1)
-            hmmsearch --domtblout {output.dir}/$name -E 0.001 $model {output.prot}
+            hmmsearch --domtblout {output.dir}/$name -E 0.0000000001 $model {input}
         done
 
         for f in {output.dir}/*
@@ -219,7 +396,7 @@ rule adjust_conjscan:
     input:
         mge = "{dir}/conj_elements.txt",
         hits = "{dir}/conj_hits.txt",
-        list = "{dir}/accession_list.txt"
+        list = "{dir}/assembly_accessions.txt"
     output:
         "{dir}/conj_sum.txt"
     run:
@@ -239,9 +416,9 @@ rule adjust_conjscan:
 
         for i in range(len(mge)):
             if i == (len(mge)-1):
-                sum += str(mge[i].rstrip()) + " (" + str(round(int(hits[i])/int(len(list)), 6)) + ")"
+                sum += str(mge[i].rstrip()) + " (" + str(hits[i]).rstrip() + ")"
             else:
-                sum += str(mge[i].rstrip()) + " (" + str(round(int(hits[i])/int(len(list)), 6)) + ")" + "\n"
+                sum += str(mge[i].rstrip()) + " (" + str(hits[i]).rstrip() + ")" + "\n"
 
         if len(mge) == 0:
             sum += "NA"
@@ -255,33 +432,29 @@ rule adjust_conjscan:
 #----------------------------------------------------------------------------------------------------------------------------------------------------------
 rule is_blast:
     input:
-        "{dir}/contexts_protein.fna"
+        "{dir}/db_nucl/contexts.fna"
     output:
-        out = "{dir}/blastout_is.txt",
-        db = "{dir}/db/contexts.fna"
+        out = "{dir}/blastout_is.txt"
     shell:
         """
         set +o pipefail
 
-        if [[ ! -d {wildcards.dir}/db ]]; then
-            mkdir {wildcards.dir}/db
-        fi
-        
-        cp {input} {output.db}
-        makeblastdb -in {output.db} -dbtype prot
-
-        blastp -query /home/dlund/index_files/ISfinder-sequences/IS.faa -out {output.out} -db {wildcards.dir}/db/contexts.fna -evalue 0.001 -qcov_hsp_perc 50 -outfmt 7
+        blastn -query /home/dlund/index_files/ISfinder-sequences/IS.fna -out {output.out} -db {input} -evalue 0.001 -qcov_hsp_perc 50 -outfmt 7
         """
 
 rule compile_is:
     input:
-        "{dir}/blastout_is.txt"
+        results = "{dir}/blastout_is.txt",
+        positions = "{dir}/ARG_positions.txt"
     output:
         temp("{dir}/is_elements.txt")
     run:      
-        is_information = summarize_blast_results(input[0],60.00)        
+        is_information = summarize_blast_results_distance_considered(input[0],input[1],90.00,1000)        
 
         is_output = ""
+
+        if is_information is None:
+            is_information = []
 
         for row in is_information:
             is_output += str(row)
@@ -309,25 +482,47 @@ rule apply_integron_finder:
         """
         set +o pipefail
 
-	if [[ ! -f {output.sum} ]]; then
-            integron_finder --local-max --outdir {wildcards.dir} --mute --func-annot --evalue-attc 0.001 {input}
+        size=$(grep '>' {input} | wc -l)
+
+        if [[ $size -gt 100 ]]; then
+            grep '>' {input} > {wildcards.dir}/lines.txt
+
+            python /home/dlund/scripts/miscellaneous_scripts/get_random_entries.py {wildcards.dir}/lines.txt 100 {wildcards.dir}/sample.txt
+
+            python /home/dlund/scripts/miscellaneous_scripts/extract_subset.py {wildcards.dir}/sample.txt {wildcards.dir}/lines.txt {input} {wildcards.dir}/context_subset.fna
+
+            if [[ ! -f {output.sum} ]]; then
+                integron_finder --outdir {wildcards.dir} --mute {wildcards.dir}/context_subset.fna
+
+#                mv {wildcards.dir}/Results_Integron_Finder_context_subset/context_subset.summary {output.sum}
+            fi
+
+            if [[ ! -f {output.sum} ]]; then
+                touch {output.sum}
+            fi
+
+            rm {wildcards.dir}/lines.txt {wildcards.dir}/sample.txt {wildcards.dir}/context_subset.fna
+
+        else
+	    if [[ ! -f {output.sum} ]]; then
+                integron_finder --outdir {wildcards.dir} --mute {input}
+            fi
+
+            if [[ ! -f {output.sum} ]]; then
+                touch {output.sum} 
+            fi
         fi
 
-        if [[ ! -f {output.sum} ]]; then
-            touch {output.sum} 
-        fi
-
-        cat {output.sum} | cut -f 2 | tail -n +2 > {output.id}
-        cat {output.sum} | cut -f 3 | tail -n +2 > {output.complete}
+        cat {wildcards.dir}/Results_Integron_Finder*/*.summary | cut -f 2 | tail -n +2 > {output.id}
+        cat {wildcards.dir}/Results_Integron_Finder*/*.summary | cut -f 3 | tail -n +2 > {output.complete}
         """
 
 rule compile_integrons:
     input:
         id = "{dir}/integron_id.txt",
-        complete = "{dir}/complete.txt",
-        reference = "{dir}/species.txt"
+        complete = "{dir}/complete.txt"
     output:
-        temp("{dir}/integrons.txt")
+        "{dir}/integrons.txt"
     run:
         file1 = open(input[0], 'r')
         ids = file1.readlines()
@@ -336,10 +531,6 @@ rule compile_integrons:
         file2 = open(input[1], 'r')
         complete = file2.readlines()
         file2.close()
-
-        file5 = open(input[2], 'r')
-        reference = file5.readlines()
-        file5.close()
 
         unique_names = []
 
@@ -357,7 +548,7 @@ rule compile_integrons:
         sum_total = []
 
         for i in range(len(unique_names)):
-            sum_total.append(unique_names[i].rstrip() + ": " + "Complete (" + str(sum(sum_complete[:,i])/int(len(reference))) + "\n")
+            sum_total.append(unique_names[i].rstrip() + ": " + "Complete (" + str(sum(sum_complete[:,i])) + ")" + "\n")
 
         integrons = ""
 
@@ -376,23 +567,27 @@ rule compile_integrons:
 #----------------------------------------------------------------------------------------------------------------------------------------------------------
 rule blast_co_loc:
     input:
-        "{dir}/db/contexts.fna"
+        "{dir}/db_nucl/contexts.fna"
     output:
         "{dir}/blastout_co_loc.txt"
     shell:
         """
-        blastx -query /home/dlund/index_files/resfinder.fsa -db {input} -out {output} -evalue 0.001 -qcov_hsp_perc 75 -outfmt 7
+        blastn -query /home/dlund/index_files/resfinder.fsa -db {input} -out {output} -evalue 0.001 -qcov_hsp_perc 75 -outfmt 7
         """
 
 rule compile_co_loc:
     input:
-        "{dir}/blastout_co_loc.txt"
+        results = "{dir}/blastout_co_loc.txt",
+        positions = "{dir}/ARG_positions.txt" 
     output:
         temp("{dir}/co_loc_ARGs.txt")
     run:
-        info_co_loc = summarize_blast_results(input[0], 90.00)
+        info_co_loc = summarize_blast_results(input[0],90.00)
 
         output_args = ""
+
+        if info_co_loc is None:
+            info_co_loc = []
 
         for row in info_co_loc:
             output_args += str(row) 
@@ -450,7 +645,7 @@ rule compile_taxonomy:
 #----------------------------------------------------------------------------------------------------------------------------------------------------------
 rule blast:
     input:
-        "{dir}/{dir}.fna"
+        "{dir}/proteins.fna"
     output:
         "{dir}/blastout.txt"
     shell:
@@ -518,7 +713,7 @@ rule compile_metadata:
         integrons = "{dir}/integrons.txt",
         co_loc = "{dir}/co_loc_ARGs.txt",
         blast ="{dir}/blast_info.txt",
-        list = "{dir}/accession_list.txt",
+        list = "{dir}/assembly_accessions.txt",
         species = "{dir}/top_species.txt",
         pathogens = "{dir}/top_pathogens.txt",
         phylum = "{dir}/top_phylum.txt"
