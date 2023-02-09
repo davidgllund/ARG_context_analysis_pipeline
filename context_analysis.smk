@@ -1,5 +1,33 @@
 #----------------------------------------------------------------------------------------------------------------------------------------------------------
 #----------------------------------------------------------------------------------------------------------------------------------------------------------
+# DESCRIPTION
+#----------------------------------------------------------------------------------------------------------------------------------------------------------
+#----------------------------------------------------------------------------------------------------------------------------------------------------------
+# This pipeline compiles information about predicted ARG families, including
+# - Highest similarity to known ARG
+# - Taxonomy of host species
+# - Pathogens among host species
+# - MGEs in the genetic vicinity of the ARGs, including:
+#   - Conjugative element(s)
+#   - Insertion sequence(s)
+#   - Integron(s)
+#
+# Each family should be placed in its own directory, each directory should include the following files:
+# - proteins.fna
+#   - Multifasta containing protein sequences representing the ARGs in the cluster.
+# - nucleotides.fna
+#   - Multifasta containing nucleotide sequences representing the ARGs in the cluster.
+# - contexts.fna
+#   - Multifasta containing a genetic region up to 10kb up- and downstream of each ARG in the cluster.
+# - species.txt
+#   - Species of the hosts of the ARGs.
+# - phylum.txt
+#   - Phyla of the hosts of the ARGs.
+# - pathogens.txt
+#   - Pathogens among the host species.
+#
+#----------------------------------------------------------------------------------------------------------------------------------------------------------
+#----------------------------------------------------------------------------------------------------------------------------------------------------------
 # IMPORT PACKAGES AND DEFINE FUNCTIONS
 #----------------------------------------------------------------------------------------------------------------------------------------------------------
 #----------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -11,7 +39,7 @@ import csv
 from Bio import SeqIO
 
 # Define list of wildcards to make rules apply to all subdirectories
-DIR, = glob_wildcards("{dir}/contexts.fna")
+DIR, = glob_wildcards("{dir}/proteins.fna")
 
 # Function that, given a list, counts the number of unique entries and returns the top 3 most frequently occurring entries from the list.
 def get_top_items(list):
@@ -283,7 +311,7 @@ def summarize_blast_results_distance_considered(results,position,threshold,dista
         else:
             summary.append(name + " [" + str(max(percentages)) + "-" + str(min(percentages)) + "%] (" + str(j) + ")" + "\n")
 
-        return summary
+    return summary
 
 #----------------------------------------------------------------------------------------------------------------------------------------------------------
 #----------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -367,7 +395,10 @@ rule apply_conjscan:
     shell:
         """
         set +o pipefail
-        mkdir {output.dir}
+
+        if [[ ! -d {output.dir} ]]; then
+            mkdir {output.dir}
+        fi
 
         for model in /home/dlund/models/conjscan_models/*
         do 
@@ -381,7 +412,7 @@ rule apply_conjscan:
             if [[ $hit == 0 ]]; then 
                 rm $f 
             else
-                echo $hit >> {output.hits}
+                grep -v '^#' $f | cut -d ' ' -f 1 | rev | cut -d '_' -f 2,3,4,5,6,7,8,9 | rev | uniq | wc -l >> {output.hits}
             fi 
         done
 
@@ -389,7 +420,7 @@ rule apply_conjscan:
             touch {output.hits}
         fi
 
-        ls -l {output.dir} | tail -n +2 | rev | cut -d ' ' -f 1 | rev  > {output.mge}
+        ls {output.dir} > {output.mge}
         """
 
 rule adjust_conjscan:
