@@ -1,5 +1,5 @@
 ### Introduction
-This reposiotory contains the custom code used to perform genetic context analysis for the manuscript COMMSBIO-23-0244A. Alongside the main script used to run the analysis ('context_analysis.smk'), files containing user instructions, auxiliary scripts and example data are also provided.
+This reposiotory contains the custom code used to perform genetic context analysis for the manuscript COMMSBIO-23-0244A. Alongside the main script used to run the analysis ("context_analysis.smk"), files containing user instructions, auxiliary scripts and example data are also provided.
 
 ### Dependencies
 To run the scripts in this repository, the following software is required:
