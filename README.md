@@ -41,13 +41,13 @@ python scripts/download_auxiliary_files.py
 3. Cluster the protein sequences into families (<70\% amino acid identity) using
 
 ```
-snakemake -s scripts/preprocess_fargene_output.smk --cores 10 all
+snakemake -s scripts/preprocess_fargene_output.smk --cores [number of cores] all
 ```
 
 4. For each cluster, generate files containing nuelotide and proteins sequence(s), as well as taxonomy and NCBI accession ids of host genome(s).
 
 ```
-snakemake -s scripts/compile_cluster_data.smk --cores 10 all
+snakemake -s scripts/compile_cluster_data.smk --cores [number of cores] all
 ```
 
 5. Retrieve genetic regions of up to 10kb up- and downstream of the genes in each cluster from their host genome(s) using 
@@ -59,7 +59,7 @@ source scripts/retrieve_contexts.sh
 6. Run genetic context analysis using
 
 ```
-snakemake -s scripts/context_analysis.smk --cores 10 --use-conda all
+snakemake -s scripts/context_analysis.smk --cores [number of cores] --use-conda all
 ```
 
 The results of the analysis can then be found in the file called "context_analysis_results.txt". This is a large table describing the closest known homolog (with \% amino acid identity), host taxonomy (and if any pathogenic species are present among the hosts), and any identified mobile genetic elements and/or co-localized mobile resistance genes for the genes in each cluster.
