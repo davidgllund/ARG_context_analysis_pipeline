@@ -7,7 +7,7 @@ To run the scripts in this repository, the following software is required:
     - pandas >= 2.0.3
     - Biopython >= 1.81
     - gdown >= 4.7.1
-- Snakemake >= 7.25.0
+- Snakemake >= 5.32.0
 - R >= 4.2.0
     - Taxonomizr >= 0.10.2
 
@@ -18,10 +18,8 @@ Additionally, the following software should be located in your $PATH:
 - mafft >= 7.3.10
 - FastTree >= 2.1.9
 - HMMER >= 3.3.2
-- EMBOSS >= 6.6.0
-- BLAST >= 2.14.0
-
-To make installation easier, the file "arg_context_analysis.yml" provided in the env folder can be used to generate a viritual environment with the required dependencies installed.
+- EMBOSS >= 6.5.7
+- BLAST >= 2.10.1
 
 ### Tutorial
 Below is a step-by-step guide on how to run genetic context analysis on a small subset of predicted APH(3') sequences. Note that some databases (e.g. NCBI Taxonomy) have been updated since the study described in COMMSBIO-23-0244A was performed, therefore some inconsistencies may appear. The pipeline is designed to run on Unix based servers.
@@ -59,7 +57,7 @@ source scripts/retrieve_contexts.sh
 6. Run genetic context analysis using
 
 ```
-snakemake -s scripts/context_analysis.smk --cores [number of cores] --use-conda all
+snakemake -s scripts/context_analysis.smk --cores [number of cores] --use-conda --conda-frontend conda all
 ```
 
 The results of the analysis can then be found in the file called "context_analysis_results.txt". This is a large table describing the closest known homolog (with \% amino acid identity), host taxonomy (and if any pathogenic species are present among the hosts), and any identified mobile genetic elements and/or co-localized mobile resistance genes for the genes in each cluster.
