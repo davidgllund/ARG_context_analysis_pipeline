@@ -323,11 +323,7 @@ def summarize_blast_results_distance_considered(results,position,threshold,dista
 rule all:
     input:
         expand("{dir}/metadata.txt", dir=DIR),
-<<<<<<< HEAD
         "context_analysis_results.txt"
-=======
-        "metadata_complete.txt"
->>>>>>> 490ec144f70a9c9c2e6f3e561162f4a0b9cdfb01
 
 #----------------------------------------------------------------------------------------------------------------------------------------------------------
 # Generate auxillary data
@@ -383,11 +379,7 @@ rule find_arg_positions:
 
         blastn -query {input.genes} -db {input.contexts} -out {output.out} -evalue 0.00000001 -qcov_hsp_perc 100 -outfmt 7
         grep -v '^#' {output.out} | cut -f 2,9,10 > {output.tmp}
-<<<<<<< HEAD
         python scripts/remove_duplicate_lines.py {output.tmp} {output.positions}
-=======
-        python /home/dlund/scripts/miscellaneous_scripts/remove_duplicate_lines.py {output.tmp} {output.positions}
->>>>>>> 490ec144f70a9c9c2e6f3e561162f4a0b9cdfb01
         """
 
 #----------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -408,11 +400,7 @@ rule apply_conjscan:
             mkdir {output.dir}
         fi
 
-<<<<<<< HEAD
         for model in models/conjscan_models/profiles/*
-=======
-        for model in /home/dlund/models/conjscan_models/*
->>>>>>> 490ec144f70a9c9c2e6f3e561162f4a0b9cdfb01
         do 
             name=$(echo $model | rev | cut -d '/' -f 1 | rev | cut -d '.' -f 1)
             hmmsearch --domtblout {output.dir}/$name -E 0.0000000001 $model {input}
@@ -475,23 +463,15 @@ rule adjust_conjscan:
 #----------------------------------------------------------------------------------------------------------------------------------------------------------
 rule is_blast:
     input:
-<<<<<<< HEAD
         context = "{dir}/db_nucl/contexts.fna",
         iss = "databases/ISfinder-sequences/IS.fna"
-=======
-        "{dir}/db_nucl/contexts.fna"
->>>>>>> 490ec144f70a9c9c2e6f3e561162f4a0b9cdfb01
     output:
         out = "{dir}/blastout_is.txt"
     shell:
         """
         set +o pipefail
 
-<<<<<<< HEAD
         blastn -query {input.iss} -out {output.out} -db {input.context} -evalue 0.001 -qcov_hsp_perc 50 -outfmt 7
-=======
-        blastn -query /home/dlund/index_files/ISfinder-sequences/IS.fna -out {output.out} -db {input} -evalue 0.001 -qcov_hsp_perc 50 -outfmt 7
->>>>>>> 490ec144f70a9c9c2e6f3e561162f4a0b9cdfb01
         """
 
 rule compile_is:
@@ -523,21 +503,13 @@ rule compile_is:
 #----------------------------------------------------------------------------------------------------------------------------------------------------------
 rule apply_integron_finder:
     input:
-<<<<<<< HEAD
         contexts = "{dir}/contexts.fna"
-=======
-        "{dir}/contexts.fna"
->>>>>>> 490ec144f70a9c9c2e6f3e561162f4a0b9cdfb01
     output:
         sum = "{dir}/Results_Integron_Finder_contexts/contexts.summary",
         id = "{dir}/integron_id.txt",
         complete = "{dir}/complete.txt"
     conda:
-<<<<<<< HEAD
         "../envs/IFv2.yaml"
-=======
-        "/home/dlund/envs/IFv2.yaml"
->>>>>>> 490ec144f70a9c9c2e6f3e561162f4a0b9cdfb01
     shell:
         """
         set +o pipefail
@@ -545,7 +517,6 @@ rule apply_integron_finder:
         size=$(grep '>' {input} | wc -l)
 
         if [[ $size -gt 100 ]]; then
-<<<<<<< HEAD
             grep '>' {input.contexts} > {wildcards.dir}/lines.txt
 
             python scripts/get_random_entries.py {wildcards.dir}/lines.txt 100 {wildcards.dir}/sample.txt
@@ -554,18 +525,6 @@ rule apply_integron_finder:
 
             if [[ ! -f {output.sum} ]]; then
                 integron_finder --outdir {wildcards.dir} --mute {wildcards.dir}/context_subset.fna
-=======
-            grep '>' {input} > {wildcards.dir}/lines.txt
-
-            python /home/dlund/scripts/miscellaneous_scripts/get_random_entries.py {wildcards.dir}/lines.txt 100 {wildcards.dir}/sample.txt
-
-            python /home/dlund/scripts/miscellaneous_scripts/extract_subset.py {wildcards.dir}/sample.txt {wildcards.dir}/lines.txt {input} {wildcards.dir}/context_subset.fna
-
-            if [[ ! -f {output.sum} ]]; then
-                integron_finder --outdir {wildcards.dir} --mute {wildcards.dir}/context_subset.fna
-
-#                mv {wildcards.dir}/Results_Integron_Finder_context_subset/context_subset.summary {output.sum}
->>>>>>> 490ec144f70a9c9c2e6f3e561162f4a0b9cdfb01
             fi
 
             if [[ ! -f {output.sum} ]]; then
@@ -638,7 +597,6 @@ rule compile_integrons:
 #----------------------------------------------------------------------------------------------------------------------------------------------------------
 rule blast_co_loc:
     input:
-<<<<<<< HEAD
         context = "{dir}/db_nucl/contexts.fna",
         resfinder = "databases/resfinder.fsa"
     output:
@@ -646,14 +604,6 @@ rule blast_co_loc:
     shell:
         """
         blastn -query {input.resfinder} -db {input.context} -out {output.out} -evalue 0.001 -qcov_hsp_perc 75 -outfmt 7
-=======
-        "{dir}/db_nucl/contexts.fna"
-    output:
-        "{dir}/blastout_co_loc.txt"
-    shell:
-        """
-        blastn -query /home/dlund/index_files/resfinder.fsa -db {input} -out {output} -evalue 0.001 -qcov_hsp_perc 75 -outfmt 7
->>>>>>> 490ec144f70a9c9c2e6f3e561162f4a0b9cdfb01
         """
 
 rule compile_co_loc:
@@ -726,7 +676,6 @@ rule compile_taxonomy:
 #----------------------------------------------------------------------------------------------------------------------------------------------------------
 rule blast:
     input:
-<<<<<<< HEAD
         prot = "{dir}/proteins.fna",
         db = "databases/resfinder_translated/resfinder.fasta"
     output:
@@ -735,28 +684,13 @@ rule blast:
         """
         set +o pipefail
         blastp -query {input.prot} -out {output.out} -db {input.db} -qcov_hsp_perc 50 -outfmt 7 -max_target_seqs 1
-=======
-        "{dir}/proteins.fna"
-    output:
-        "{dir}/blastout.txt"
-    shell:
-        """
-        set +o pipefail
-        blastp -query {input} -out {output} -db /home/dlund/index_files/blast_db/reference_ARGs.fsa -qcov_hsp_perc 50 -outfmt 7 -max_target_seqs 1
->>>>>>> 490ec144f70a9c9c2e6f3e561162f4a0b9cdfb01
         """
 
 rule adjust_blast:
     input:
-<<<<<<< HEAD
         blast = "{dir}/blastout.txt"
     output:
         info = temp("{dir}/blast_info.txt")
-=======
-        "{dir}/blastout.txt"
-    output:
-        temp("{dir}/blast_info.txt")
->>>>>>> 490ec144f70a9c9c2e6f3e561162f4a0b9cdfb01
     run:
         subject = []
         identity = []
@@ -843,14 +777,8 @@ rule make_table:
         data=expand("{dir}/metadata.txt", dir=DIR),
         head="head.txt"
     output:
-<<<<<<< HEAD
         results = "context_analysis_results.txt"
     shell:
         "cat {input.head} clusters/*/metadata.txt > {output.results}"
-=======
-        "metadata_complete.txt"
-    shell:
-        "cat {input.head} */metadata.txt > {output}"
->>>>>>> 490ec144f70a9c9c2e6f3e561162f4a0b9cdfb01
 
 #----------------------------------------------------------------------------------------------------------------------------------------------------------
