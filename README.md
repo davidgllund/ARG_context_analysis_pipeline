@@ -53,6 +53,7 @@ snakemake -s scripts/compile_cluster_data.smk --cores [number of cores] all
 ```
 source scripts/retrieve_contexts.sh
 ```
+    Note: This is the most time-consuming part of the analysis, and can take up to an hour depending on the limitations of the hardware.
 
 6. Run genetic context analysis using
 
